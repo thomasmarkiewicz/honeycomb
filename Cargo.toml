@@ -1,0 +1,22 @@
+[package]
+name = "honeycomb"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+local-discovery=["sn_networking/local-discovery"]
+
+[dependencies]
+sn_client = { git = "https://github.com/maidsafe/safe_network.git" }
+sn_networking = { git = "https://github.com/maidsafe/safe_network.git" }
+sn_transfers = { git = "https://github.com/maidsafe/safe_network.git" }
+sn_registers = { git = "https://github.com/maidsafe/safe_network.git" }
+
+xor_name = "5.0.0"
+dirs-next = "~2.0.0"
+color-eyre = "0.6.2"
+clap = { version = "4.2.1", features = ["derive"] }
+bls = { package = "blsttc", version = "8.0.1" }
+tokio = { version = "1.32.0", features = ["io-util", "macros", "parking_lot", "rt", "sync", "time"] }
