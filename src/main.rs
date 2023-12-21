@@ -1,4 +1,4 @@
-use bls::SecretKey;
+use bls::{PublicKey, SecretKey};
 use clap::Parser;
 use color_eyre::{
     eyre::{eyre, Result, WrapErr},
@@ -16,41 +16,24 @@ struct Opt {
     user: String,
 }
 
-const HONEYCOMB_SK: &str = "4fd9baad382f577c5a71b9e8da385423ce51768081ab4ad2dfeab48d716267f6";
-const HONEYCOMB_REGISTER_ADDRESS: &str = "63cc0c706dc89b75b8030c0806ce749ee3e2dac5b1f6fa1b1122daba9bb1681d99696624cd75823e359f4c5121fbe30ee6b642d4ec6d79fe1bfdf69e9f431b00767c74b63cf55a89170f8a917c09cc1d";
+const HONEYCOMB_PUBLIC_KEY: &str = "98b0807cde78204259d89a7ca510fe41a763774117efbdb0134c125b0a730567e8fb7699a7f6c686e7e5a013bfe6078d";
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    /*
-    // create fixed secret key for honeycomb app
-    let honeycomb_app_sk = SecretKey::from_hex(HONEYCOMB_SK).unwrap();
-    println!("honeycomb_sk: {:?}", honeycomb_app_sk.to_hex());
-
-    // create honeycomb app client
-    let honeycomb_app_client = Client::new(honeycomb_app_sk, None, false, None).await?;
+    //
+    // Create client simulating end-user
+    // with random secret key for now
+    // (so different end-user on each run)
+    //
+    let end_user_sk = SecretKey::random();
+    let end_user_client = Client::new(end_user_sk, None, false, None).await?;
     println!(
-        "client public key: {:?}",
-        honeycomb_app_client.signer_pk().to_hex()
-    );
-    */
-
-    //
-    // create fixed secret key for honeycomb app
-    //
-    let sk = SecretKey::random();
-    println!("sk: {:?}", sk.to_hex());
-
-    //
-    // create client
-    //
-    let client = Client::new(sk, None, false, None).await?;
-    println!(
-        "client created, public key: {:?}",
-        client.signer_pk().to_hex()
+        "Created end-user client with public key: {:?}",
+        end_user_client.signer_pk().to_hex()
     );
 
     //
-    // load local wallet
+    // load end-user's local wallet
     //
     let root_dir = dirs_next::data_dir()
         .ok_or_else(|| eyre!("could not obtain data directory path".to_string()))?
@@ -62,34 +45,45 @@ async fn main() -> Result<()> {
         .suggestion(
             "If you have an old wallet file, it may no longer be compatible. Try removing it",
         )?;
-    let mut wallet_client = WalletClient::new(client.clone(), wallet);
+    let mut wallet_client = WalletClient::new(end_user_client.clone(), wallet);
 
     //
-    // Load or create a public Register at a fixed known location
+    // Create a well-known RegisterAddress
+    // from an XorName and a `honeycomb` app's public key
     //
-    let meta = XorName::from_content(b"safe://honeycomb");
-    println!("XorName meta: {:?}", meta);
+    const HONEYCOMB_PUBLIC_KEY: &str = "98b0807cde78204259d89a7ca510fe41a763774117efbdb0134c125b0a730567e8fb7699a7f6c686e7e5a013bfe6078d";
+    let app_name = XorName::from_content(b"safe://honeycomb");
+    let honeycomb_pk = PublicKey::from_hex(HONEYCOMB_PUBLIC_KEY).unwrap();
+    let address = RegisterAddress::new(app_name, honeycomb_pk);
+    println!("Honeycomb XorName: {:?}", app_name);
+    println!("Honeycomb public key: {:?}", honeycomb_pk.to_hex());
+    println!("Honeycomb public RegisterAddress: {:?}", address.to_hex());
 
-    let address = RegisterAddress::from_hex(HONEYCOMB_REGISTER_ADDRESS).unwrap();
-
-    let mut reg_replica = match client.get_register(address).await {
+    //
+    // Load or create the above Honeycomb public RegisterAddress as an end-user
+    //
+    let honeycomb_register = match end_user_client.get_register(address).await {
         Ok(register) => {
             println!("Register found at {:?}!", register.address().to_hex(),);
             register
         }
         Err(_) => {
             println!("Register not found, creating one at {address:?}");
-            let (register, _cost, _royalties_fees) = client
-                .create_and_pay_for_register(meta, &mut wallet_client, true)
+            let (register, _cost, _royalties_fees) = end_user_client
+                .create_and_pay_for_register(app_name, &mut wallet_client, true)
                 .await?;
 
             register
         }
     };
 
-    println!("Register address: {:?}", reg_replica.address().to_hex());
-    println!("Register owned by: {:?}", reg_replica.owner().to_hex());
-    println!("Register permissions: {:?}", reg_replica.permissions());
+    println!(
+        "Honeycomb register address: {:?}",
+        honeycomb_register.address().to_hex()
+    );
+    println!("Owned by: {:?}", honeycomb_register.owner().to_hex());
+    println!("Permissions: {:?}", honeycomb_register.permissions());
 
     Ok(())
 }
+
